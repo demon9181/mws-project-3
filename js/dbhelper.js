@@ -25,12 +25,6 @@ class DBHelper {
         });
     }
 
-    static storeAllRestaurants(restaurantdata) {
-        for (x = 0; x < restaurantdata.length; x++) {
-
-        }
-    }
-
     /**
      * Database URL.
      * Change this to restaurants.json file location on your server.
@@ -40,6 +34,29 @@ class DBHelper {
         //  return `http://192.168.1.74:8887/data/restaurants.json`;
         return "http://localhost:1337/restaurants";
         // return `http://127.0.0.1:8887/data/restaurants.json`;
+    }
+    static get REVIEWS_URL(){
+        return "http://localhost:1337/reviews/?restaurant_id=${id}";
+    }
+    static fetchReviews(callback){
+        /////////////////////
+        console/log("fetch reviews called");
+        fetch(DBHelper.REVIEWS_URL).then(function(response) {
+            let respo = response;
+            console.log("got reviews from server");
+            return respo.json();
+        }).then(function(reviews) {
+            DBHelper.openDatabase().then(function(response) {
+                var tx = response.transaction('reviews', 'readwrite');
+                var storey = tx.objectStore('reviews');
+                for (let review of reviews) {
+                    storey.put(review, review.restaurant_id);
+                    console.log("reviews locked and loaded");
+                }
+            });
+            callback(null, reviews);
+        });
+        /////////////////////
     }
 
     /**
@@ -59,29 +76,41 @@ class DBHelper {
         //   }
         // };
         // xhr.send();
+        fetchAllReviews();
         fetch(DBHelper.DATABASE_URL).then(function(response) {
             let resp = response;
             return resp.json();
         }).then(function(restaurants) {
+        
+        
+            DBHelper.openDatabase().then(function(response) {
             
-            
-                DBHelper.openDatabase().then(function(response) {
-                    console.log(restaurants)
                     var tx = response.transaction('restaurants', 'readwrite');
                     var storex = tx.objectStore('restaurants');
                     for (let restaurant of restaurants) {
                         storex.put(restaurant, restaurant.id);
-                
+            
                         // return tx.complete;
                     }
+            
+                });
+             
                 callback(null, restaurants);
-                }
-                ).then(restaurants => callback(null, restaurants));
                 
-        });
+                
+        })
+        .catch(DBHelper.openDatabase().then(function(restaurants){
+            var tx = restaurants.transaction('restaurants');
+            var storex = tx.objectStore('restaurants');
+            return storex.getAll();
+        }).then(function(obj){
+            console.log(obj);
+            callback(null, obj);
+        })
+            )
+        ;
     }
-
-
+    
   /**
    * Fetch a restaurant by its ID.
    */
@@ -93,6 +122,7 @@ class DBHelper {
       } else {
         const restaurant = restaurants.find(r => r.id == id);
         if (restaurant) { // Got the restaurant
+        fetchReviews();
           callback(null, restaurant);
         } else { // Restaurant does not exist in the database
           callback('Restaurant does not exist', null);
